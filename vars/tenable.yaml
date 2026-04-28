@@ -1,0 +1,12 @@
+---
+tenable_package_url: "https://hts.jfrog.io/artifactory/hts-packages/"
+tenable_version: "10.4.0"
+tenable_windows_install_path: "C:\\Temp"
+tenable_windows_package_suffix: "x64.msi"
+tenable_windows_installer: "NessusAgent-{{ tenable_version }}-{{ tenable_windows_package_suffix }}"
+tenable_group: "Servers - HTS SRE Supported"
+tenable_host: "cloud.tenable.com"
+tenable_port: 443
+install_tenable: true
+tenable_local_mode: false
+os_package_name: "tenable"
