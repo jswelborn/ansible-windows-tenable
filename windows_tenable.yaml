@@ -1,0 +1,94 @@
+---
+- name: Install or remove Tenable Nessus Agent on Windows
+  hosts: all
+  gather_facts: true
+  vars_files:
+    - vars/tenable.yaml
+
+  pre_tasks:
+    - name: Validate Tenable key is provided
+      ansible.builtin.assert:
+        that:
+          - tenable_key is defined
+          - tenable_key | trim | length > 0
+        fail_msg: "tenable_key must be provided by AAP credential unless tenable_local_mode is true."
+      when:
+        - install_tenable
+        - not tenable_local_mode
+      no_log: true
+
+  tasks:
+    - name: Check whether Tenable is already installed
+      ansible.windows.win_shell: |
+        $packages = Get-ItemProperty `
+          HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*, `
+          HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* `
+          -ErrorAction SilentlyContinue |
+          Where-Object {
+            $_.DisplayName -in @(
+              'Tenable Nessus (x64)',
+              'Nessus Agent (x64)',
+              'NessusAgent'
+            )
+          }
+
+        if ($packages) {
+          "installed"
+        } else {
+          "missing"
+        }
+      register: tenable_windows_check
+      changed_when: false
+
+    - name: Remove Tenable Nessus Agent
+      ansible.windows.win_package:
+        name: "Nessus Agent (x64)"
+        state: absent
+      when: not install_tenable
+
+    - name: Stop play after Tenable removal
+      ansible.builtin.meta: end_play
+      when: not install_tenable
+
+    - name: Stop play if Tenable is already installed
+      ansible.builtin.meta: end_play
+      when: tenable_windows_check.stdout | trim == "installed"
+
+    - name: Ensure Windows install directory exists
+      ansible.windows.win_file:
+        path: "{{ tenable_windows_install_path }}"
+        state: directory
+
+    - name: Set installer path
+      ansible.builtin.set_fact:
+        os_package_local_path: "{{ tenable_windows_install_path }}\\{{ tenable_windows_installer }}"
+
+    - name: Download Tenable Windows installer
+      ansible.windows.win_get_url:
+        url: "{{ tenable_package_url }}{{ tenable_windows_installer }}"
+        dest: "{{ os_package_local_path }}"
+
+    - name: Install Tenable Nessus Agent
+      ansible.windows.win_package:
+        path: "{{ os_package_local_path }}"
+        state: present
+        arguments: >-
+          NESSUS_GROUPS="{{ tenable_group }}"
+          NESSUS_SERVER="{{ tenable_host }}:{{ tenable_port }}"
+          NESSUS_KEY={{ tenable_key }}
+        expected_return_code:
+          - 0
+          - 3010
+      when: not tenable_local_mode
+      no_log: true
+
+    - name: Ensure Nessus Agent service is enabled and started
+      ansible.windows.win_service:
+        name: "Tenable Nessus Agent"
+        state: started
+        start_mode: auto
+      register: tenable_service
+      retries: 3
+      delay: 10
+      until: tenable_service is succeeded
+      when: not tenable_local_mode
