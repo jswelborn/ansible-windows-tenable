@@ -1,11 +1,26 @@
 ---
 - name: Install or remove Tenable Nessus Agent on Windows
   hosts: all
-  gather_facts: true
+  gather_facts: false
+
   vars_files:
     - vars/tenable.yaml
 
   pre_tasks:
+    - name: Set Kerberos password variable
+      ansible.builtin.set_fact:
+        kerberos_password: "{{ ansible_password | default(ansible_ssh_pass | default('')) }}"
+
+    - name: Obtain Kerberos ticket
+      ansible.builtin.shell: |
+        printf '%s\n' "{{ kerberos_password }}" | /usr/bin/kinit -V "{{ ansible_user }}"
+      delegate_to: localhost
+      changed_when: false
+      no_log: true
+
+    - name: Gather Windows facts
+      ansible.windows.setup:
+
     - name: Validate Tenable key is provided
       ansible.builtin.assert:
         that:
