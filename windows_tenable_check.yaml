@@ -1,0 +1,25 @@
+---
+- name: Check Windows Tenable Nessus Agent service
+  hosts: all
+  gather_facts: false
+
+  vars:
+    service_name: "Tenable Nessus Agent"
+
+  tasks:
+    - name: Gather Tenable Nessus Agent service info
+      ansible.windows.win_service_info:
+        name: "{{ service_name }}"
+      register: service_info
+
+    - name: Fail if Tenable Nessus Agent service is missing
+      ansible.builtin.fail:
+        msg: "Tenable Nessus Agent service is missing"
+      when: not service_info.exists
+
+    - name: Fail if Tenable Nessus Agent service is not running
+      ansible.builtin.fail:
+        msg: "Tenable Nessus Agent service exists but is not running"
+      when:
+        - service_info.exists
+        - service_info.services[0].state != "started"
